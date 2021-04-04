@@ -51,21 +51,49 @@ class LaporanTunggakanController extends Controller
                                 ->first();
 
             //jumlah tunggakan
-            $transaksi      = DB::table('transaksis')
+
+            $jenis_pembayaran = DB::table('jenis_pembayarans')
+                                ->where('id_jenis_pembayaran', $request->input('id_jenis_pembayaran'))
+                                ->first();
+
+            if($jenis_pembayaran->total_pembayaran_pertahun == 1){
+                $transaksi      = DB::table('transaksis')
                                 ->join('tahun_ajarans', 'tahun_ajarans.id_tahun', '=', 'transaksis.id_tahun')
                                 ->where('id_siswa', $d->id_siswa)
                                 ->where('id_jenis_pembayaran', $request->input('id_jenis_pembayaran'))
                                 ->where('tahun_ajarans.status_aktif', 1)
                                 ->select(
-                                    DB::raw('TIMESTAMPDIFF(MONTH, "'.$tahun->tgl_mulai.'", CURRENT_DATE) - count(transaksis.id_transaksi) as jumlah_tunggakan'),
+                                    DB::raw('sum(transaksis.jumlah_bayar) as jumlah_tunggakan'),
                                 )
                                 ->first();
+                
+                $hutang_tunggakan      = (@$spp->biaya - @$keringanan->besaran_keringanan) - ($transaksi->jumlah_tunggakan);
+
+                
+            }else{
+                $transaksi      = DB::table('transaksis')
+                                ->join('tahun_ajarans', 'tahun_ajarans.id_tahun', '=', 'transaksis.id_tahun')
+                                ->where('id_siswa', $d->id_siswa)
+                                ->where('id_jenis_pembayaran', $request->input('id_jenis_pembayaran'))
+                                ->where('tahun_ajarans.status_aktif', 1)
+                                ->select(
+                                    DB::raw('TIMESTAMPDIFF(MONTH, "'.$tahun->tgl_mulai.'", CURRENT_DATE) as total_bulan'),
+                                    DB::raw('sum(transaksis.jumlah_bayar) as jumlah_tunggakan')
+                                    // DB::raw('sum(transaksis.jumlah_bayar) as jumlah_tunggakan')
+                                )
+                                ->first();
+
+                $hutang_tunggakan      = (@$spp->biaya - @$keringanan->besaran_keringanan) * ($transaksi->total_bulan + 1) - $transaksi->jumlah_tunggakan;
+                // $hutang_tunggakan       = (@spp->biaya - @keringanan->besaran_keringanan);
+            }
             
             $siswa[] = array(
                 'id_siswa'          => $d->id_siswa,
+                'nis'               => $d->nis,
                 'nama_siswa'        => $d->nama_siswa,
-                'total_tunggakan'   => $transaksi->jumlah_tunggakan + 1,
-                'hutang_tunggakan'  => (@$spp->biaya - @$keringanan->besaran_keringanan) * ($transaksi->jumlah_tunggakan + 1),
+                // 'total_tunggakan'   => $transaksi->jumlah_tunggakan + 1,
+                'hutang_tunggakan'  => $hutang_tunggakan,
+                
                 'spp'               => @$spp->biaya,
                 'keringanan'        => @$keringanan->besaran_keringanan,
                 'kelas'             => @$kelas->kelas.'/'.@$kelas->jenjang
